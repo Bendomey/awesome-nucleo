@@ -4,10 +4,10 @@ The nucleo-gateway is the official API gateway service for Nucleo framework. Use
 ## Features
 - [ ] support HTTP & HTTPS
 - [ ] serve static files
-- [ ] multiple routes
+- [x] multiple routes
 - [ ] support Connect-like middlewares in global-level, route-level and alias-level.
-- [ ] alias names (with named parameters & REST routes)
-- [ ] whitelist
+- [x] alias names (with named parameters & REST routes)
+- [x] whitelist
 - [ ] multiple body parsers (json, urlencoded)
 - [ ] CORS headers
 - [ ] Rate limiter
@@ -27,12 +27,15 @@ import (
     "github.com/Bendomey/awesome-nucleo/gateway"
 )
 
+var GatewayMixin = gateway.NewGatewayMixin(gateway.GatewayMixin{})
+
 var ApiService = nucleo.ServiceSchema{
     Name: "api",
-    Mixins:  []nucleo.Mixin{gateway.GatewayService}
-    Settings: map[string]interface{}{}
+    Mixins:  []nucleo.Mixin{GatewayMixin},
+    Settings: map[string]interface{}{
+        "port": 5001,
+    }
 }
-
 ```
 
 
