@@ -16,9 +16,10 @@ func registerActionsRouter(context nucleo.Context, settings map[string]interface
 
 	for _, actionHandler := range getPermittedActionsAndThenCreateEndpoints(context, settings, fetchServices(context)) {
 		actionHandler.context = context
+		actionHandler.settings = settings
 
 		path := actionHandler.getFullPath()
-		context.Logger().Trace("registerActionsRouter() action -> ", actionHandler.action, " path: ", path)
+		context.Logger().Traceln("registerActionsRouter() action -> ", actionHandler.action, " path: ", path)
 
 		methods := actionHandler.AcceptedMethods()
 
@@ -40,7 +41,7 @@ func fetchServices(context nucleo.Context) []map[string]interface{} {
 	})
 
 	if services.IsError() {
-		context.Logger().Error("Could not load the list of services/action from the registry. Error: ", services.Error())
+		context.Logger().Errorln("Could not load the list of services/action from the registry. Error: ", services.Error())
 		return []map[string]interface{}{}
 	}
 

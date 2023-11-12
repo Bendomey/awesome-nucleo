@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -18,9 +20,8 @@ var Calculator = nucleo.ServiceSchema{
 			Name:        "add",
 			Description: "add two numbers",
 			Handler: func(ctx nucleo.Context, params nucleo.Payload) interface{} {
-				ctx.Logger().Info("add action called")
-
-				return params.Get("a").Int() + params.Get("b").Int()
+				return errors.New("hello world")
+				// return params.Get("a").Int() + params.Get("b").Int()
 			},
 		},
 	},
@@ -41,7 +42,7 @@ var GatewayApi = nucleo.ServiceSchema{
 				Path:          "/api",
 				MappingPolicy: gateway.MappingPolicyRestrict,
 				Aliases: map[string]string{
-					"GET /calculators/get": "calculator.add",
+					"POST /calculators/get": "calculator.add",
 				},
 				Authorization:  false,
 				Authentication: false,
@@ -52,11 +53,25 @@ var GatewayApi = nucleo.ServiceSchema{
 				Whitelist: []string{"$node.*"},
 			},
 		},
+		// FIXME: parsing issue in nucleo-go. For now we can't pass data to function
+		"onError": func() {
+			// "onError": func(context *gin.Context, response nucleo.Payload) {
+			// jsonSerializer := serializer.JSONSerializer{}
+			// responsePayload := payload.New(map[string]interface{}{
+			// 	"error": response.Error().Error(),
+			// 	"type":  "NotFound",
+			// 	"code":  400,
+			// })
+			// json := jsonSerializer.PayloadToBytes(responsePayload)
+
+			// context.Writer.Write(json)
+			fmt.Print("error occured")
+		},
 	},
 }
 
 func main() {
-	bkr := broker.New(&nucleo.Config{})
+	bkr := broker.New(&nucleo.Config{LogLevel: nucleo.LogLevelInfo})
 
 	bkr.PublishServices(GatewayApi, Calculator)
 

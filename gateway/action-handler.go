@@ -22,6 +22,7 @@ type actionHandler struct {
 	routePath            string
 	action               string
 	context              nucleo.Context
+	settings             map[string]interface{}
 	acceptedMethodsCache map[string]bool
 }
 
@@ -59,26 +60,76 @@ func (handler *actionHandler) Handler() gin.HandlerFunc {
 	logger := handler.context.Logger()
 
 	return func(ctx *gin.Context) {
-		handler.sendReponse(logger, <-handler.context.Call(handler.action, paramsFromRequest(ctx.Request, logger)), ctx.Writer)
+		logRequestFormatType, logRequestFormatTypeExists := handler.settings["logRequest"].(nucleo.LogLevelType)
+		if logRequestFormatTypeExists {
+			logRequestLogger := getLogger(logRequestFormatType, logger)
+			logRequestLogger("Call '", handler.action, "' action")
+		}
+
+		params := paramsFromRequest(ctx.Request, logger)
+
+		logRequestParamsFormatType, logRequestParamsFormatTypeExists := handler.settings["logRequestParams"].(nucleo.LogLevelType)
+		if logRequestParamsFormatTypeExists {
+			logRequestParamsLogger := getLogger(logRequestParamsFormatType, logger)
+			logRequestParamsLogger("Params: ", params)
+		}
+
+		callActionResponse := <-handler.context.Call(handler.action, params)
+
+		logResponseDataFormatType, logResponseDataFormatTypeExists := handler.settings["logResponseData"].(nucleo.LogLevelType)
+		if logResponseDataFormatTypeExists {
+			logResponseDataLogger := getLogger(logResponseDataFormatType, logger)
+			logResponseDataLogger("Data: ", callActionResponse)
+		}
+
+		handler.sendReponse(logger, callActionResponse, ctx)
 	}
 }
 
 var succesStatusCode = 200
 var errorStatusCode = 500
 
-// sendReponse send the result payload  back using the ResponseWriter
-func (handler *actionHandler) sendReponse(logger *log.Entry, result nucleo.Payload, response gin.ResponseWriter) {
-	var json []byte
-	response.Header().Add("Content-Type", "application/json")
-	if result.IsError() {
-		response.WriteHeader(errorStatusCode)
-		json = jsonSerializer.PayloadToBytes(payload.Empty().Add("error", result.Error().Error()))
-	} else {
-		response.WriteHeader(succesStatusCode)
-		json = jsonSerializer.PayloadToBytes(result)
+func (handler *actionHandler) responesErrorHandler(ginContext *gin.Context, result nucleo.Payload) {
+	logger := handler.context.Logger()
+
+	ginContext.Writer.WriteHeader(errorStatusCode)
+
+	log4XXResponses, log4XXResponsesExists := handler.settings["log4XXResponses"].(nucleo.LogLevelType)
+	if log4XXResponsesExists {
+		log4XXResponsesLogger := getLogger(log4XXResponses, logger)
+		log4XXResponsesLogger("Gateway  Request error! - action: ", handler.action, " error ", result.Error())
 	}
-	logger.Debug("Gateway SendReponse() - action: ", handler.action, " json: ", string(json), " result.IsError(): ", result.IsError())
-	response.Write(json)
+
+	// return response regardless.
+	json := jsonSerializer.PayloadToBytes(payload.Empty().Add("error", result.Error().Error()))
+	ginContext.Writer.Write(json)
+
+	onError, onErrorExists := handler.settings["onError"].(func(string))
+
+	// if user has onError middleware configured, they will be ablle to override it.
+	if onErrorExists {
+		// FIXME: parsing issue in nucleo-go
+		// onError(ginContext, result)
+		onError("string")
+	}
+}
+
+// sendReponse send the result payload  back using the ResponseWriter
+func (handler *actionHandler) sendReponse(logger *log.Entry, result nucleo.Payload, ginContext *gin.Context) {
+	// Return with a JSON object
+	ginContext.Writer.Header().Add("Content-Type", "application/json; charset=utf-8")
+
+	if result.IsError() {
+		handler.responesErrorHandler(ginContext, result)
+		return
+	}
+
+	var json []byte
+	ginContext.Writer.WriteHeader(succesStatusCode)
+	json = jsonSerializer.PayloadToBytes(result)
+
+	logger.Debug("Gateway SendReponse() - action: ", handler.action, " json: ", string(json))
+	ginContext.Writer.Write(json)
 }
 
 // acceptedMethods return a map of accepted methods for this handler.
@@ -123,7 +174,7 @@ func paramsFromRequestForm(request *http.Request, logger *log.Entry) (map[string
 	params := map[string]interface{}{}
 	err := request.ParseForm()
 	if err != nil {
-		logger.Error("Error calling request.ParseForm() -> ", err)
+		logger.Errorln("Error calling request.ParseForm() -> ", err)
 		return nil, err
 	}
 	for name, value := range request.Form {
@@ -151,4 +202,24 @@ func paramsFromRequest(request *http.Request, logger *log.Entry) nucleo.Payload 
 		return payload.Error("Error trying to parse request body. Error: ", err.Error())
 	}
 	return jsonSerializer.BytesToPayload(&bts)
+}
+
+func getLogger(logType nucleo.LogLevelType, existingLogger *log.Entry) func(args ...interface{}) {
+
+	if logType == nucleo.LogLevelWarn {
+		return existingLogger.Warnln
+	} else if logType == nucleo.LogLevelDebug {
+		return existingLogger.Debugln
+	} else if logType == nucleo.LogLevelTrace {
+		return existingLogger.Traceln
+	} else if logType == nucleo.LogLevelError {
+		return existingLogger.Errorln
+	} else if logType == nucleo.LogLevelFatal {
+		return existingLogger.Fatalln
+	} else if logType == nucleo.LogLevelInfo {
+		return existingLogger.Infoln
+	}
+
+	// don't log when it's not set
+	return func(args ...interface{}) {}
 }

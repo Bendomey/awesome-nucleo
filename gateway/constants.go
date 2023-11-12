@@ -1,6 +1,8 @@
 package gateway
 
-import "github.com/Bendomey/nucleo-go"
+import (
+	"github.com/Bendomey/nucleo-go"
+)
 
 type MappingPolicyType string
 
@@ -83,23 +85,26 @@ var defaultSettings = map[string]interface{}{
 	"routes": defaultRoutes,
 
 	// Log each request (default to "info" level)
-	"logRequest": nucleo.LogLevelInfo,
+	"logRequest": nucleo.LogLevelDebug,
 
 	// Log the request ctx.params (default to "debug" level)
-	"logRequestParams": nucleo.LogLevelDebug,
+	"logRequestParams": nucleo.LogLevelInfo,
 
 	// Log each response (default to "info" level)
 	"logResponse": nucleo.LogLevelInfo,
 
 	// Log the response data (default to disable)
-	"logResponseData": false,
+	"logResponseData": nucleo.LogLevelInfo,
 
 	// If set to true, it will log 4xx client errors, as well
-	"log4XXResponses": false,
+	"log4XXResponses": nucleo.LogLevelInfo,
 
 	// Log the route registration/aliases related activity
 	"logRouteRegistration": nucleo.LogLevelInfo,
 
 	// Optimize route order
 	"optimizeOrder": true,
+
+	// FIXME: parsing issue in nucleo-go
+	// "onError": func(context *gin.Context, response nucleo.Payload) {},
 }
