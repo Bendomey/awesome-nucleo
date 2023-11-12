@@ -87,7 +87,7 @@ func (svc *GatewayService) Started(context nucleo.BrokerContext, schema nucleo.S
 	go svc.startServer(context)
 	go registerActionsRouter(context.(nucleo.Context), svc.settings, svc.gatewayRouter)
 
-	context.Logger().Info("Gateway Started()")
+	context.Logger().Infoln("Gateway Started()")
 }
 
 func (svc *GatewayService) Stopped(context nucleo.BrokerContext, service nucleo.ServiceSchema) {
@@ -96,7 +96,7 @@ func (svc *GatewayService) Stopped(context nucleo.BrokerContext, service nucleo.
 		defer cancel()
 
 		if err := svc.server.Shutdown(ctx); err != nil {
-			context.Logger().Error("Error shutting down server - error: ", err)
+			context.Logger().Errorln("Error shutting down server - error: ", err)
 		}
 
 	}
@@ -110,14 +110,14 @@ func (svc *GatewayService) getAddress() string {
 
 func (svc *GatewayService) startServer(context nucleo.BrokerContext) {
 	address := svc.getAddress()
-	context.Logger().Info("Server starting to listen on: ", address)
+	context.Logger().Infoln("Server starting to listen on: ", address)
 
 	if err := svc.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		context.Logger().Error("Error listening server on: ", address, " error: ", err)
+		context.Logger().Errorln("Error listening server on: ", address, " error: ", err)
 		return
 	}
 
-	context.Logger().Info("Server started on: ", address)
+	context.Logger().Infoln("Server started on: ", address)
 }
 
 func (svc *GatewayService) registerBaseGatewayPath() {
