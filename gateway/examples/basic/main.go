@@ -37,7 +37,7 @@ var Calculator = nucleo.ServiceSchema{
 	},
 }
 var authenticateHandler = func(context nucleo.Context, ginContext *gin.Context, alias string) interface{} {
-	print("authenticate called")
+	fmt.Println("authenticate called")
 
 	return map[string]interface{}{
 		"name":  "Benjamin",
@@ -46,7 +46,7 @@ var authenticateHandler = func(context nucleo.Context, ginContext *gin.Context, 
 }
 
 var authorizeHandler = func(context nucleo.Context, ginContext *gin.Context, alias string) {
-	print("authorize called")
+	fmt.Println("authorize called")
 }
 
 var GatewayMixin = gateway.NewGatewayMixin(gateway.GatewayMixin{
