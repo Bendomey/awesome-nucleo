@@ -19,11 +19,14 @@ var jsonSerializer = serializer.CreateJSONSerializer(log.WithFields(log.Fields{
 
 type actionHandler struct {
 	alias                string
-	routePath            string
 	action               string
 	context              nucleo.Context
 	settings             map[string]interface{}
 	acceptedMethodsCache map[string]bool
+	route                Route
+	router               *gin.RouterGroup
+	authenticate         *AuthenticateMethodsFunc
+	authorize            *AuthorizeMethodFunc
 }
 
 // aliasPath return the alias path(endpoint), if one exists for the action.
@@ -49,9 +52,9 @@ func (handler *actionHandler) getFullPath() string {
 	fullPath := ""
 	aliasPath := handler.aliasPath()
 	if aliasPath != "" {
-		fullPath = fmt.Sprint(handler.routePath, "/", aliasPath)
+		fullPath = fmt.Sprint("/", aliasPath)
 	} else {
-		fullPath = fmt.Sprint(handler.routePath, "/", actionPath)
+		fullPath = fmt.Sprint("/", actionPath)
 	}
 	return strings.Replace(fullPath, "//", "/", -1)
 }
@@ -60,6 +63,33 @@ func (handler *actionHandler) Handler() gin.HandlerFunc {
 	logger := handler.context.Logger()
 
 	return func(ctx *gin.Context) {
+
+		if handler.route.OnBeforeCall != nil {
+			(*handler.route.OnBeforeCall)(handler.context, ctx, handler.route, handler.alias)
+		}
+
+		// Authentication call
+		if handler.route.Authentication && handler.authenticate != nil {
+			user := (*handler.authenticate)(handler.context, ctx, handler.alias)
+			if user != nil {
+				handler.context.Logger().Debug("Authenticated user", user)
+				handler.context.Meta().AddMany(map[string]interface{}{
+					"user": user,
+				})
+			} else {
+				// Anonymous user
+				handler.context.Logger().Debug("Anonymous user")
+				handler.context.Meta().AddMany(map[string]interface{}{
+					"user": nil,
+				})
+			}
+		}
+
+		// Authorization call
+		if handler.route.Authorization && handler.authorize != nil {
+			(*handler.authorize)(handler.context, ctx, handler.alias)
+		}
+
 		logRequestFormatType, logRequestFormatTypeExists := handler.settings["logRequest"].(nucleo.LogLevelType)
 		if logRequestFormatTypeExists {
 			logRequestLogger := getLogger(logRequestFormatType, logger)
@@ -82,7 +112,12 @@ func (handler *actionHandler) Handler() gin.HandlerFunc {
 			logResponseDataLogger("Data: ", callActionResponse)
 		}
 
+		if handler.route.OnAfterCall != nil {
+			(*handler.route.OnAfterCall)(handler.context, ctx, handler.route, callActionResponse)
+		}
+
 		handler.sendReponse(logger, callActionResponse, ctx)
+
 	}
 }
 
@@ -100,17 +135,16 @@ func (handler *actionHandler) responesErrorHandler(ginContext *gin.Context, resu
 		log4XXResponsesLogger("Gateway  Request error! - action: ", handler.action, " error ", result.Error())
 	}
 
-	// return response regardless.
-	json := jsonSerializer.PayloadToBytes(payload.Empty().Add("error", result.Error().Error()))
-	ginContext.Writer.Write(json)
-
-	onError, onErrorExists := handler.settings["onError"].(func(string))
+	onError, onErrorExists := handler.settings["onError"].(func(context *gin.Context, response nucleo.Payload))
 
 	// if user has onError middleware configured, they will be ablle to override it.
 	if onErrorExists {
 		// FIXME: parsing issue in nucleo-go
-		// onError(ginContext, result)
-		onError("string")
+		onError(ginContext, result)
+	} else {
+		// return response.
+		json := jsonSerializer.PayloadToBytes(payload.Empty().Add("error", result.Error().Error()))
+		ginContext.Writer.Write(json)
 	}
 }
 

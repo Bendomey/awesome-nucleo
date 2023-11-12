@@ -5,15 +5,15 @@ The nucleo-gateway is the official API gateway service for Nucleo framework. Use
 - [ ] support HTTP & HTTPS
 - [ ] serve static files
 - [x] multiple routes
-- [ ] support Connect-like middlewares in global-level, route-level and alias-level.
+- [x] support Connect-like middlewares in global-level, route-level and alias-level.
 - [x] alias names (with named parameters & REST routes)
 - [x] whitelist
-- [ ] multiple body parsers (json, urlencoded)
-- [ ] CORS headers
-- [ ] Rate limiter
-- [ ] before & after call hooks
+- [x] multiple body parsers (json, urlencoded). Use our middlewares to set this up
+- [x] [CORS headers](https://github.com/gin-contrib/cors). Use with our middlewares.
+- [x] Rate limiter. Use custom middleware for this.
+- [x] before & after call hooks
 - [ ] Buffer & Stream handling
-- [ ] support authorization
+- [x] support authentication and authorization
 
 ## Installation
 ```bash

@@ -7,32 +7,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// registerActionsRouter registers all exposed permitted actions/aliases as REST endpoints.
-func registerActionsRouter(context nucleo.Context, settings map[string]interface{}, router *gin.RouterGroup) {
-	// make sure we have a router
-	if router == nil {
-		return
-	}
-
-	for _, actionHandler := range getPermittedActionsAndThenCreateEndpoints(context, settings, fetchServices(context)) {
-		actionHandler.context = context
-		actionHandler.settings = settings
-
-		path := actionHandler.getFullPath()
-		context.Logger().Traceln("registerActionsRouter() action -> ", actionHandler.action, " path: ", path)
-
-		methods := actionHandler.AcceptedMethods()
-
-		// loop over methods
-		for method, shouldRegisterMethod := range methods {
-			if shouldRegisterMethod {
-				router.Handle(method, path, actionHandler.Handler())
-			}
-		}
-	}
-
-}
-
 // fetch available services with their actions from nucleo registry. Yeah, it's nice like that ;)
 func fetchServices(context nucleo.Context) []map[string]interface{} {
 	services := <-context.Call("$node.services", map[string]interface{}{
@@ -46,38 +20,6 @@ func fetchServices(context nucleo.Context) []map[string]interface{} {
 	}
 
 	return services.MapArray()
-}
-
-func getPermittedActionsAndThenCreateEndpoints(context nucleo.Context, settings map[string]interface{}, services []map[string]interface{}) []*actionHandler {
-	actionHandlers := []*actionHandler{}
-
-	// get the list of routes
-	routes := settings["routes"].([]Route)
-
-	for _, route := range routes {
-		filteredActions := []string{}
-
-		settingsWhiteList := route.Whitelist
-		whitelist := []string{"**"}
-		if settingsWhiteList != nil {
-			whitelist = settingsWhiteList
-		}
-
-		for _, service := range services {
-			actions := service["actions"].(map[string]map[string]interface{})
-			for _, action := range actions {
-				actionName := action["name"].(string)
-				if shouldIncludeAction(whitelist, actionName) {
-					filteredActions = append(filteredActions, actionName)
-				}
-			}
-		}
-
-		// now that we have the permitted actions, we gotta create the REST endpoints
-		actionHandlers = append(actionHandlers, createActionHandlers(route, filteredActions)...)
-	}
-
-	return actionHandlers
 }
 
 var actionWildCardRegex = regexp.MustCompile(`(.+)\.\*`)
@@ -114,17 +56,11 @@ func shouldIncludeAction(whitelist []string, action string) bool {
 	return false
 }
 
-func createActionHandlers(route Route, actions []string) []*actionHandler {
+func createActionHandlers(route Route, actions []string, router *gin.RouterGroup, authenticate *AuthenticateMethodsFunc, authorize *AuthorizeMethodFunc) []*actionHandler {
 	// before we create the endpoints, lets go further and then filter by aliases.
 	// There are two scenarios:
 	// Scenario 1: A user would want all their actions to be endpoints. MappingPolicy -> all
 	// Scenario 2: A would want to specify the actions that needs endpoint. MappingPolicy -> restrict
-
-	settingsRoutePath := route.Path
-	routePath := "/"
-	if settingsRoutePath != "" {
-		routePath = settingsRoutePath
-	}
 
 	settingsMappingPolicy := route.MappingPolicy
 	mappingPolicy := MappingPolicyAll
@@ -133,7 +69,11 @@ func createActionHandlers(route Route, actions []string) []*actionHandler {
 		mappingPolicy = settingsMappingPolicy
 	}
 
-	aliases := route.Aliases
+	aliases := map[string]string{}
+
+	if route.Aliases != nil {
+		aliases = route.Aliases
+	}
 
 	actionToAlias := invertStringMap(aliases)
 
@@ -146,7 +86,14 @@ func createActionHandlers(route Route, actions []string) []*actionHandler {
 			continue
 		}
 
-		handlers = append(handlers, &actionHandler{alias: actionAlias, routePath: routePath, action: action})
+		handlers = append(handlers, &actionHandler{
+			alias:        actionAlias,
+			action:       action,
+			router:       router,
+			route:        route,
+			authenticate: authenticate,
+			authorize:    authorize,
+		})
 	}
 
 	return handlers

@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"github.com/Bendomey/nucleo-go"
+	"github.com/gin-gonic/gin"
 )
 
 type MappingPolicyType string
@@ -22,6 +23,9 @@ type Route struct {
 	// Path of the route group
 	Path string
 
+	// Route-level middlewares.
+	Use []gin.HandlerFunc
+
 	//whitelist filter used to filter the list of actions.
 	//accept regex, and wildcard on action name
 	//regex: /^math\.\w+$/
@@ -35,6 +39,12 @@ type Route struct {
 	//aliases -> alias names instead of action names.
 	Aliases map[string]string
 
+	// This is called before action is called
+	OnBeforeCall *func(context nucleo.Context, ginContext *gin.Context, route Route, alias string)
+
+	// This is called after action is called but before response is sent to user.
+	OnAfterCall *func(context nucleo.Context, ginContext *gin.Context, route Route, response nucleo.Payload)
+
 	//authorization turn on/off authorization
 	Authorization bool
 
@@ -47,26 +57,17 @@ var defaultRoutes = []Route{
 		Name: "base-routes",
 		Path: "/",
 
-		//whitelist filter used to filter the list of actions.
-		//accept regex, and wildcard on action name
-		//regex: /^math\.\w+$/
-		//wildcard: posts.*
+		Use: []gin.HandlerFunc{},
+
 		Whitelist: []string{"**"},
 
-		//mappingPolicy -> all : include all actions, the ones with aliases and without.
-		//mappingPolicy -> restrict : include only actions that are in the list of aliases.
 		MappingPolicy: MappingPolicyAll,
 
-		//aliases -> alias names instead of action names.
-		Aliases: map[string]string{
-			// 	"login": "auth.login"
-		},
+		Aliases: map[string]string{},
 
-		//authorization turn on/off authorization
-		Authorization: false,
+		OnBeforeCall: nil,
 
-		//authentication turn on/off authentication
-		Authentication: false,
+		OnAfterCall: nil,
 	},
 }
 
@@ -80,6 +81,9 @@ var defaultSettings = map[string]interface{}{
 
 	// base path
 	"path": "/",
+
+	// Global middlewares. Applied to all routes.
+	"use": []gin.HandlerFunc{},
 
 	// Routes
 	"routes": defaultRoutes,
@@ -106,5 +110,5 @@ var defaultSettings = map[string]interface{}{
 	"optimizeOrder": true,
 
 	// FIXME: parsing issue in nucleo-go
-	// "onError": func(context *gin.Context, response nucleo.Payload) {},
+	"onError": func(context *gin.Context, response nucleo.Payload) {},
 }
