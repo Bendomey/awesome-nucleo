@@ -3,7 +3,7 @@ module github.com/Bendomey/awesome-nucleo/gateway
 go 1.19
 
 require (
-	github.com/Bendomey/nucleo-go v0.1.4
+	github.com/Bendomey/nucleo-go v0.1.5
 	github.com/gin-gonic/gin v1.9.1
 	github.com/sirupsen/logrus v1.9.3
 )
