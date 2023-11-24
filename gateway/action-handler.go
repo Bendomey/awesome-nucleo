@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Bendomey/nucleo-go"
+	"github.com/Bendomey/nucleo-go/errors"
 	"github.com/Bendomey/nucleo-go/payload"
 	"github.com/Bendomey/nucleo-go/serializer"
 	"github.com/gin-gonic/gin"
@@ -137,9 +138,8 @@ func (handler *actionHandler) responesErrorHandler(ginContext *gin.Context, resu
 
 	onError, onErrorExists := handler.settings["onError"].(func(context *gin.Context, response nucleo.Payload))
 
-	// if user has onError middleware configured, they will be ablle to override it.
+	// if user has onError middleware configured, they will be able to override it.
 	if onErrorExists {
-		// FIXME: parsing issue in nucleo-go
 		onError(ginContext, result)
 	} else {
 		// return response.
@@ -153,8 +153,9 @@ func (handler *actionHandler) sendReponse(logger *log.Entry, result nucleo.Paylo
 	// Return with a JSON object
 	ginContext.Writer.Header().Add("Content-Type", "application/json; charset=utf-8")
 
-	if result.IsError() {
-		handler.responesErrorHandler(ginContext, result)
+	nucleoError, nucleoErrorExists := resultIsAnError(result)
+	if nucleoErrorExists {
+		handler.responesErrorHandler(ginContext, *nucleoError)
 		return
 	}
 
@@ -256,4 +257,51 @@ func getLogger(logType nucleo.LogLevelType, existingLogger *log.Entry) func(args
 
 	// don't log when it's not set
 	return func(args ...interface{}) {}
+}
+
+func resultIsAnError(result nucleo.Payload) (*nucleo.Payload, bool) {
+	validationError, isValidationErrorExists := result.Value().(errors.NucleoValidationError)
+	if isValidationErrorExists {
+		nucleoError := errors.NewNucleoError(errors.NewNucleoErrorInput{
+			Message: &validationError.Message,
+			Code:    &validationError.Code,
+			Type:    validationError.Type,
+			Data:    validationError.Data,
+		})
+		errorPayload := payload.New(nucleoError)
+		return &errorPayload, true
+	}
+
+	clientError, isClientErrorExists := result.Value().(errors.NucleoClientError)
+	if isClientErrorExists {
+		nucleoError := errors.NewNucleoError(errors.NewNucleoErrorInput{
+			Message: &clientError.Message,
+			Code:    &clientError.Code,
+			Type:    clientError.Type,
+			Data:    clientError.Data,
+		})
+		errorPayload := payload.New(nucleoError)
+		return &errorPayload, true
+	}
+
+	nucleoError, isnucleoErrorExists := result.Value().(errors.NucleoError)
+	if isnucleoErrorExists {
+		errorPayload := payload.New(nucleoError)
+		return &errorPayload, true
+	}
+
+	if result.IsError() {
+		errorMessage := result.Error().Error()
+		errorCode := 400
+		nucleoError := errors.NewNucleoError(errors.NewNucleoErrorInput{
+			Message: &errorMessage,
+			Code:    &errorCode,
+			Type:    "CLIENT_ERROR",
+			Data:    map[string]interface{}{},
+		})
+		errorPayload := payload.New(nucleoError)
+		return &errorPayload, true
+	}
+
+	return nil, false
 }

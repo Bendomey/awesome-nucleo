@@ -10,6 +10,7 @@ import (
 	"github.com/Bendomey/awesome-nucleo/gateway"
 	"github.com/Bendomey/nucleo-go"
 	"github.com/Bendomey/nucleo-go/broker"
+	nucleoError "github.com/Bendomey/nucleo-go/errors"
 	"github.com/Bendomey/nucleo-go/payload"
 	"github.com/Bendomey/nucleo-go/serializer"
 	"github.com/gin-gonic/gin"
@@ -22,6 +23,10 @@ var Calculator = nucleo.ServiceSchema{
 		{
 			Name:        "add",
 			Description: "add two numbers",
+			Params: map[string]interface{}{
+				"a": "number",
+				"b": "number",
+			},
 			Handler: func(ctx nucleo.Context, params nucleo.Payload) interface{} {
 				return errors.New("hello world")
 				// return params.Get("a").Int() + params.Get("b").Int()
@@ -83,7 +88,7 @@ var GatewayApi = nucleo.ServiceSchema{
 				Use:           []gin.HandlerFunc{},
 				MappingPolicy: gateway.MappingPolicyRestrict,
 				Aliases: map[string]string{
-					"POST /calculators/get":  "calculator.add",
+					"POST /calculators":      "calculator.add",
 					"GET /calculators/hello": "calculator.hello",
 				},
 				OnBeforeCall:   &OnBeforeCallHandler,
@@ -94,15 +99,20 @@ var GatewayApi = nucleo.ServiceSchema{
 		},
 		"onError": func(context *gin.Context, response nucleo.Payload) {
 			jsonSerializer := serializer.JSONSerializer{}
+
+			nucleoError := response.Value().(nucleoError.NucleoError)
+
 			responsePayload := payload.New(map[string]interface{}{
-				"error": response.Error().Error(),
-				"type":  "NotFound",
-				"code":  400,
+				"message": nucleoError.Message,
+				"type":    nucleoError.Type,
+				"code":    nucleoError.Code,
+				"data":    nucleoError.Data,
 			})
 			json := jsonSerializer.PayloadToBytes(responsePayload)
 
+			context.Writer.WriteHeader(nucleoError.Code)
 			context.Writer.Write(json)
-			fmt.Print("error occured")
+
 		},
 	},
 }
